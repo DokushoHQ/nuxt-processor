@@ -43,16 +43,46 @@ export default defineNuxtModule<ModuleOptions>({
   async setup(_options, nuxt) {
     const { resolve } = createResolver(import.meta.url)
 
-    const redisInline = JSON.stringify(_options.redis ?? {})
+    // Build-time defaults as fallback (only used if env vars not set at runtime)
+    const buildTimeDefaults = JSON.stringify(_options.redis ?? {})
 
-    const nitroPlugin = `
-    import { defineNitroPlugin } from '#imports'
-    import { $workers } from '#processor-utils'
-
-    export default defineNitroPlugin(() => {
-      $workers().setConnection(${redisInline})
-    })
-    `
+    const nitroPlugin = [
+      `import { defineNitroPlugin } from '#imports'`,
+      `import { $workers } from '#processor-utils'`,
+      ``,
+      `function getRedisConfig() {`,
+      `  const defaults = ${buildTimeDefaults}`,
+      ``,
+      `  // Runtime env vars take precedence over build-time defaults`,
+      `  const url = process.env.NUXT_REDIS_URL`,
+      `  if (url) {`,
+      `    return Object.assign({}, defaults, { url, lazyConnect: defaults.lazyConnect ?? true })`,
+      `  }`,
+      ``,
+      `  // Check for individual env vars at runtime`,
+      `  const host = process.env.NUXT_REDIS_HOST`,
+      `  const port = process.env.NUXT_REDIS_PORT`,
+      `  const password = process.env.NUXT_REDIS_PASSWORD`,
+      `  const username = process.env.NUXT_REDIS_USERNAME`,
+      `  const db = process.env.NUXT_REDIS_DB`,
+      `  const lazyConnect = process.env.NUXT_REDIS_LAZY_CONNECT`,
+      `  const connectTimeout = process.env.NUXT_REDIS_CONNECT_TIMEOUT`,
+      ``,
+      `  return Object.assign({}, defaults, `,
+      `    host ? { host } : {},`,
+      `    port ? { port: Number(port) } : {},`,
+      `    password ? { password } : {},`,
+      `    username ? { username } : {},`,
+      `    db ? { db: Number(db) } : {},`,
+      `    lazyConnect ? { lazyConnect: lazyConnect === 'true' } : {},`,
+      `    connectTimeout ? { connectTimeout: Number(connectTimeout) } : {}`,
+      `  )`,
+      `}`,
+      ``,
+      `export default defineNitroPlugin(() => {`,
+      `  $workers().setConnection(getRedisConfig())`,
+      `})`,
+    ].join('\n')
 
     const tpl = addTemplate({
       filename: '0.processor-nuxt-plugin.ts',
@@ -109,7 +139,7 @@ declare module '#bullmq' {
             virtualCode = ''
             return
           }
-          virtualCode = generateWorkersEntryContent(workerFiles, redisInline)
+          virtualCode = generateWorkersEntryContent(workerFiles, buildTimeDefaults)
           for (const id of workerFiles) {
             this.addWatchFile(id)
           }

@@ -1,4 +1,4 @@
-export function generateWorkersEntryContent(workerFiles: string[], redisInline: string): string {
+export function generateWorkersEntryContent(workerFiles: string[], buildTimeDefaults: string): string {
   const toImportArray = workerFiles.map(id => `() => import(${JSON.stringify(id)})`).join(',\n    ')
   return `
 import { fileURLToPath } from 'node:url'
@@ -6,10 +6,39 @@ import { resolve as resolvePath } from 'node:path'
 import { consola } from 'consola'
 import { $workers } from '#processor-utils'
 
+function getRedisConfig() {
+  const defaults = ${buildTimeDefaults}
+
+  // Runtime env vars take precedence over build-time defaults
+  const url = process.env.NUXT_REDIS_URL
+  if (url) {
+    return Object.assign({}, defaults, { url, lazyConnect: defaults.lazyConnect ?? true })
+  }
+
+  // Check for individual env vars at runtime
+  const host = process.env.NUXT_REDIS_HOST
+  const port = process.env.NUXT_REDIS_PORT
+  const password = process.env.NUXT_REDIS_PASSWORD
+  const username = process.env.NUXT_REDIS_USERNAME
+  const db = process.env.NUXT_REDIS_DB
+  const lazyConnect = process.env.NUXT_REDIS_LAZY_CONNECT
+  const connectTimeout = process.env.NUXT_REDIS_CONNECT_TIMEOUT
+
+  return Object.assign({}, defaults,
+    host ? { host } : {},
+    port ? { port: Number(port) } : {},
+    password ? { password } : {},
+    username ? { username } : {},
+    db ? { db: Number(db) } : {},
+    lazyConnect ? { lazyConnect: lazyConnect === 'true' } : {},
+    connectTimeout ? { connectTimeout: Number(connectTimeout) } : {}
+  )
+}
+
 // Initialize connection as early as possible so any imports that register
 // workers/queues have a valid connection available.
 const api = $workers()
-api.setConnection(${redisInline})
+api.setConnection(getRedisConfig())
 
 export async function createWorkersApp() {
 // Avoid EPIPE when stdout/stderr are closed by terminal (e.g., Ctrl+C piping)
