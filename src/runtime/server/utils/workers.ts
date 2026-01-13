@@ -17,7 +17,21 @@ const registry: WorkersRegistry = {
   workers: [],
 }
 
+let initialized = false
+
+function initConnectionFromEnv() {
+  if (initialized) return
+  initialized = true
+
+  const url = process.env.NUXT_REDIS_URL
+  if (url) {
+    registry.connection = new IORedis(url, { maxRetriesPerRequest: null, lazyConnect: true })
+  }
+}
+
 export function $workers() {
+  initConnectionFromEnv()
+
   type ConnectionInput = QueueOptions['connection'] | (IORedisOptions & { url?: string }) | string
 
   function setConnection(connection: ConnectionInput) {

@@ -1,16 +1,11 @@
-import { defineNuxtModule, createResolver, addTypeTemplate, addServerPlugin, addTemplate } from '@nuxt/kit'
+import { defineNuxtModule, createResolver, addTypeTemplate } from '@nuxt/kit'
 import { name, version, configKey, compatibility } from '../package.json'
-import type { RedisOptions as BullRedisOptions } from 'bullmq'
 import type { Plugin } from 'rollup'
 import { relative } from 'node:path'
 import scanFolder from './utils/scan-folder'
 import { generateWorkersEntryContent } from './utils/generate-workers-entry-content'
 
-// Module options TypeScript interface definition
-type ModuleRedisOptions = BullRedisOptions & { url?: string }
-
 export interface ModuleOptions {
-  redis: ModuleRedisOptions
   /**
    * The folder containing the worker files
    * Scans for {ts,js,mjs}
@@ -28,69 +23,10 @@ export default defineNuxtModule<ModuleOptions>({
   },
   // Default configuration options of the Nuxt module
   defaults: {
-    redis: {
-      host: process.env.NUXT_REDIS_HOST ?? '127.0.0.1',
-      port: Number(process.env.NUXT_REDIS_PORT ?? 6379),
-      password: process.env.NUXT_REDIS_PASSWORD ?? '',
-      username: process.env.NUXT_REDIS_USERNAME ?? undefined, // needs Redis >= 6
-      db: Number(process.env.NUXT_REDIS_DB ?? 0), // Defaults to 0 on ioredis
-      lazyConnect: process.env.NUXT_REDIS_LAZY_CONNECT === 'true' ? true : undefined,
-      connectTimeout: process.env.NUXT_REDIS_CONNECT_TIMEOUT ? Number(process.env.NUXT_REDIS_CONNECT_TIMEOUT) : undefined,
-      url: process.env.NUXT_REDIS_URL ?? undefined,
-    } as ModuleRedisOptions,
     workers: 'server/workers',
   },
   async setup(_options, nuxt) {
     const { resolve } = createResolver(import.meta.url)
-
-    // Build-time defaults as fallback (only used if env vars not set at runtime)
-    const buildTimeDefaults = JSON.stringify(_options.redis ?? {})
-
-    const nitroPlugin = [
-      `import { defineNitroPlugin } from '#imports'`,
-      `import { $workers } from '#processor-utils'`,
-      ``,
-      `function getRedisConfig() {`,
-      `  const defaults = ${buildTimeDefaults}`,
-      ``,
-      `  // Runtime env vars take precedence over build-time defaults`,
-      `  const url = process.env.NUXT_REDIS_URL`,
-      `  if (url) {`,
-      `    return Object.assign({}, defaults, { url, lazyConnect: defaults.lazyConnect ?? true })`,
-      `  }`,
-      ``,
-      `  // Check for individual env vars at runtime`,
-      `  const host = process.env.NUXT_REDIS_HOST`,
-      `  const port = process.env.NUXT_REDIS_PORT`,
-      `  const password = process.env.NUXT_REDIS_PASSWORD`,
-      `  const username = process.env.NUXT_REDIS_USERNAME`,
-      `  const db = process.env.NUXT_REDIS_DB`,
-      `  const lazyConnect = process.env.NUXT_REDIS_LAZY_CONNECT`,
-      `  const connectTimeout = process.env.NUXT_REDIS_CONNECT_TIMEOUT`,
-      ``,
-      `  return Object.assign({}, defaults, `,
-      `    host ? { host } : {},`,
-      `    port ? { port: Number(port) } : {},`,
-      `    password ? { password } : {},`,
-      `    username ? { username } : {},`,
-      `    db ? { db: Number(db) } : {},`,
-      `    lazyConnect ? { lazyConnect: lazyConnect === 'true' } : {},`,
-      `    connectTimeout ? { connectTimeout: Number(connectTimeout) } : {}`,
-      `  )`,
-      `}`,
-      ``,
-      `export default defineNitroPlugin(() => {`,
-      `  $workers().setConnection(getRedisConfig())`,
-      `})`,
-    ].join('\n')
-
-    const tpl = addTemplate({
-      filename: '0.processor-nuxt-plugin.ts',
-      write: true,
-      getContents: () => nitroPlugin,
-    })
-
-    addServerPlugin(tpl.dst)
 
     // Alias inside the app to the identity API so user imports resolve at build-time
     nuxt.options.alias = nuxt.options.alias ?? {}
@@ -139,7 +75,7 @@ declare module '#bullmq' {
             virtualCode = ''
             return
           }
-          virtualCode = generateWorkersEntryContent(workerFiles, buildTimeDefaults)
+          virtualCode = generateWorkersEntryContent(workerFiles)
           for (const id of workerFiles) {
             this.addWatchFile(id)
           }

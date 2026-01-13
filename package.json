@@ -1,8 +1,8 @@
 {
-  "name": "nuxt-processor",
-  "version": "0.0.13",
+  "name": "@dokushohq/nuxt-processor",
+  "version": "0.0.14",
   "description": "Nuxt Processor",
-  "repository": "https://github.com/aidanhibbard/nuxt-processor",
+  "repository": "https://github.com/dokushohq/nuxt-processor",
   "license": "MIT",
   "type": "module",
   "configKey": "processor",
