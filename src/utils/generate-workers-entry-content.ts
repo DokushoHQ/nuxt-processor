@@ -27,14 +27,31 @@ for (const loader of modules) {
 await loader()
 }
 const logger = consola.create({}).withTag('nuxt-processor')
+
+// Filter workers based on environment configuration
+const onlyEnv = process.env.NUXT_PROCESSOR_WORKERS_ONLY
+const exceptEnv = process.env.NUXT_PROCESSOR_WORKERS_EXCEPT
+
+let workersToStart = api.workers
+
+if (onlyEnv) {
+  const onlyNames = onlyEnv.split(',').map(n => n.trim()).filter(Boolean)
+  workersToStart = api.workers.filter(w => onlyNames.includes(w.name))
+  logger.info('Worker filter mode: ONLY [' + onlyNames.join(', ') + ']')
+} else if (exceptEnv) {
+  const exceptNames = exceptEnv.split(',').map(n => n.trim()).filter(Boolean)
+  workersToStart = api.workers.filter(w => !exceptNames.includes(w.name))
+  logger.info('Worker filter mode: EXCEPT [' + exceptNames.join(', ') + ']')
+}
+
 try {
-const workerNames = Array.isArray(api.workers) ? api.workers.map(w => w && w.name).filter(Boolean) : []
+const workerNames = Array.isArray(workersToStart) ? workersToStart.map(w => w && w.name).filter(Boolean) : []
 logger.info('starting workers:\\n' + workerNames.map(n => ' - ' + n).join('\\n'))
-for (const w of api.workers) {
+for (const w of workersToStart) {
   w.on('error', (err) => logger.error('worker error', err))
 }
 // Explicitly start workers since autorun is disabled
-for (const w of api.workers) {
+for (const w of workersToStart) {
   try {
     // run() returns a promise that resolves when the worker stops; do not await to avoid blocking
     // eslint-disable-next-line promise/catch-or-return
@@ -48,7 +65,7 @@ logger.success('workers started')
 } catch (err) {
 logger.error('failed to initialize workers', err)
 }
-return { stop: api.stopAll, workers: api.workers }
+return { stop: api.stopAll, workers: workersToStart }
 }
 
 const isMain = (() => {

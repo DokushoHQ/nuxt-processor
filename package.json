@@ -1,6 +1,6 @@
 {
   "name": "@dokushohq/nuxt-processor",
-  "version": "0.0.14",
+  "version": "0.0.16",
   "description": "Nuxt Processor",
   "repository": "https://github.com/dokushohq/nuxt-processor",
   "license": "MIT",

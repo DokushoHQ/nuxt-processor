@@ -1,13 +1,13 @@
+import { createMain, defineCommand } from 'citty'
+import { consola } from 'consola'
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { createInterface } from 'node:readline/promises'
 import { stdin as input, stdout as output } from 'node:process'
+import { createInterface } from 'node:readline/promises'
 import { resolve } from 'pathe'
-import { consola } from 'consola'
-import { createMain, defineCommand } from 'citty'
 
+import { description, name, version } from '../package.json'
 import ensureNuxtProject from './utils/ensure-nuxt-project'
-import { version, name, description } from '../package.json'
 
 export const main = createMain({
   meta: {
@@ -29,6 +29,14 @@ export const main = createMain({
         nodeArgs: {
           type: 'string',
           description: 'Extra Node args (e.g. --inspect)',
+        },
+        only: {
+          type: 'string',
+          description: 'Only start specific workers (comma-separated names)',
+        },
+        except: {
+          type: 'string',
+          description: 'Start all workers except these (comma-separated names)',
         },
       },
       async run({ args }) {
@@ -139,7 +147,11 @@ export const main = createMain({
         const child = spawn(nodeBin, nodeArgs, {
           stdio: 'inherit',
           cwd: projectRoot,
-          env: process.env,
+          env: {
+            ...process.env,
+            ...(args.only ? { NUXT_PROCESSOR_WORKERS_ONLY: args.only as string } : {}),
+            ...(args.except ? { NUXT_PROCESSOR_WORKERS_EXCEPT: args.except as string } : {}),
+          },
         })
 
         const onSignal = (signal: NodeJS.Signals) => {
